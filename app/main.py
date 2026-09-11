@@ -234,6 +234,15 @@ def download_apk():
         return FileResponse(apk_path, media_type="application/vnd.android.package-archive", filename="QFinOpt.apk")
     raise HTTPException(status_code=404, detail="QFinOpt.apk not found on server")
 
+@app.get("/report/project")
+@app.get("/Q_FinOpt_Project_Report.pdf")
+def download_project_report_pdf():
+    """Download the comprehensive Q-FinOpt System Technical Report PDF."""
+    pdf_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Q_FinOpt_Project_Report.pdf"))
+    if os.path.exists(pdf_path):
+        return FileResponse(pdf_path, media_type="application/pdf", filename="Q_FinOpt_Project_Report.pdf")
+    raise HTTPException(status_code=404, detail="Project report PDF not found")
+
 @app.get("/health")
 def health_check():
     """Service health and timestamp check."""
