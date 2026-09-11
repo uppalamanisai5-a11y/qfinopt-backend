@@ -1,0 +1,23 @@
+{
+  "feature_cols": [
+    "ret_5d",
+    "ret_10d",
+    "ret_21d",
+    "vol_10d",
+    "vol_30d",
+    "mom_ratio",
+    "rsi_14",
+    "nav_z",
+    "Sharpe",
+    "Alpha",
+    "Beta",
+    "Expense_Ratio"
+  ],
+  "accuracy": 0.7400582942592827,
+  "precision": 0.7405208610825691,
+  "recall": 0.9990245238135985,
+  "f1": 0.8505653339550064,
+  "high_conviction_acc": 0.7501013787510138,
+  "high_conviction_threshold": 0.02929551180883206,
+  "ic": 0.03930004752889919
+}

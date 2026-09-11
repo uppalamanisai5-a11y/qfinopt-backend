@@ -35,6 +35,10 @@ class FundStatsResponse(BaseModel):
     sigma_real: float
     mu_adjusted: float
     sentiment: str
+    sortino_val: Optional[float] = None
+    mdd_val: Optional[float] = None
+    signal: Optional[str] = None
+    conviction_score: Optional[float] = None
 
 class HoldingPeriodReturn(BaseModel):
     label: str
@@ -126,6 +130,12 @@ class FundHistoryResponse(BaseModel):
     actual_pct: List[float]
     forecast_dates: List[str]
     forecast_pct: List[float]
+    forecast_upper_pct: Optional[List[float]] = None
+    forecast_lower_pct: Optional[List[float]] = None
+    signal: Optional[str] = None
+    conviction_score: Optional[float] = None
+    sortino: Optional[float] = None
+    mdd: Optional[float] = None
     hist_return_bins: List[float]
     hist_return_counts: List[int]
     stats: List[Dict[str, str]]
