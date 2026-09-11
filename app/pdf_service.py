@@ -48,9 +48,12 @@ def generate_pdf_report(req: PdfReportRequest) -> bytes:
         ("Latest NAV", f"Rs {stats.display_nav:.2f} ({stats.nav_source})"),
         ("1 Year Return", f"{stats.ret_1y:.2f}%"),
         ("Sharpe Ratio", f"{stats.sharpe_val:.3f}"),
+        ("Sortino Ratio", f"{stats.sortino_val:.3f}" if stats.sortino_val is not None else "N/A"),
         ("Alpha", f"{stats.alpha_val:.3f}"),
         ("Beta", f"{stats.beta_val:.3f}"),
+        ("Max Drawdown (MDD)", f"{stats.mdd_val:.2f}%" if stats.mdd_val is not None else "N/A"),
         ("Expense Ratio", f"{stats.expense:.2f}%"),
+        ("AI Signal & Conviction", f"{stats.signal} ({stats.conviction_score:.1f}%)" if stats.signal else "N/A"),
         ("Market Sentiment", stats.sentiment),
     ]:
         pdf.set_font("Helvetica", "B", 10)
