@@ -41,6 +41,7 @@ from app.pdf_service import generate_pdf_report
 from app.config import IST
 
 import threading
+from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
