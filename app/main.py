@@ -40,15 +40,18 @@ from app.simulation_service import (
 from app.pdf_service import generate_pdf_report
 from app.config import IST
 
-from contextlib import asynccontextmanager
+import threading
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Warm up background caches asynchronously on startup."""
-    try:
-        load_historical_data()
-    except Exception as e:
-        print(f"Warning: Initial dataset warm-up deferred: {e}")
+    def warmup():
+        try:
+            load_historical_data()
+            get_live_nav_amfi()
+        except Exception as e:
+            print(f"Warning: Initial dataset warm-up deferred: {e}")
+    threading.Thread(target=warmup, daemon=True).start()
     yield
 
 app = FastAPI(

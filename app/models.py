@@ -51,9 +51,9 @@ class ScenarioMetric(BaseModel):
 
 class WithdrawalRequest(BaseModel):
     fund_name: str
-    invest_date: str  # YYYY-MM-DD
-    investment: float = Field(default=100000.0, ge=500.0)
-    n_sim: int = Field(default=5000, ge=500, le=10000)
+    invest_date: str = Field(default="")  # YYYY-MM-DD or any parseable date
+    investment: float = Field(default=100000.0, ge=100.0)
+    n_sim: int = Field(default=5000, ge=100, le=10000)
 
 class WithdrawalResponse(BaseModel):
     fund_name: str
@@ -79,12 +79,12 @@ class WithdrawalResponse(BaseModel):
 
 class SipRequest(BaseModel):
     fund_name: str
-    invest_date: str  # YYYY-MM-DD
-    sip_amount: float = Field(default=5000.0, ge=500.0)
+    invest_date: str = Field(default="")  # YYYY-MM-DD or any parseable date
+    sip_amount: float = Field(default=5000.0, ge=100.0)
     sip_years: int = Field(default=10, ge=1, le=30)
-    annual_return_pct: float = Field(default=10.0, ge=4.0, le=25.0)
+    annual_return_pct: float = Field(default=10.0, ge=1.0, le=50.0)
     annual_vol_pct: Optional[float] = None
-    n_sim: int = Field(default=5000, ge=500, le=5000)
+    n_sim: int = Field(default=5000, ge=100, le=10000)
 
 class SipProjectionRow(BaseModel):
     year: str
