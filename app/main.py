@@ -19,6 +19,16 @@ from app.models import (
     NavSearchResultItem,
     PlatformRecommendationResponse,
     PdfReportRequest,
+    UserRegisterRequest,
+    UserLoginRequest,
+    GuestLoginRequest,
+    UserResponse,
+)
+from app.auth_service import (
+    register_user,
+    login_user,
+    login_guest,
+    get_user_by_token,
 )
 from app.market_service import fetch_live_market
 from app.data_manager import (
@@ -80,6 +90,42 @@ def health_check():
         "timestamp": datetime.now(IST).isoformat(),
         "version": "3.0.0"
     }
+
+@app.post("/api/auth/register", response_model=UserResponse)
+def auth_register(req: UserRegisterRequest):
+    """Register a new user account."""
+    try:
+        return register_user(req)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/auth/login", response_model=UserResponse)
+def auth_login(req: UserLoginRequest):
+    """Login with existing email and password credentials."""
+    try:
+        return login_user(req)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/auth/guest", response_model=UserResponse)
+def auth_guest(req: GuestLoginRequest = GuestLoginRequest()):
+    """Create an instant guest investor session."""
+    try:
+        return login_guest(req)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/auth/profile", response_model=UserResponse)
+def auth_profile(token: str = Query(..., description="Session token")):
+    """Fetch user profile by session token."""
+    user = get_user_by_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token.")
+    return user
 
 @app.get("/api/market", response_model=MarketResponse)
 def get_market(refresh: bool = False):

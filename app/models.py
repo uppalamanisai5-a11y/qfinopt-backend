@@ -192,3 +192,26 @@ class PdfReportRequest(BaseModel):
     invest_date: str
     sip_amount: float = 5000.0
     sip_years: int = 10
+
+class UserRegisterRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=50)
+    email: str = Field(..., min_length=5, max_length=100)
+    password: str = Field(..., min_length=4, max_length=100)
+    risk_profile: Optional[str] = "Moderate"
+
+class UserLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class GuestLoginRequest(BaseModel):
+    name: Optional[str] = "Guest Investor"
+    risk_profile: Optional[str] = "Moderate"
+
+class UserResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    risk_profile: str
+    token: str
+    is_guest: bool = False
+    created_at: str
