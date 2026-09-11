@@ -153,6 +153,87 @@ def get_live_nav_history_mfapi(code: str) -> Optional[pd.DataFrame]:
 
     return None
 
+def compute_dynamic_forecast(
+    values: List[float],
+    raw_dates: List[Any],
+    forecast_days: int,
+    daily_returns: Optional[pd.Series] = None,
+    beta: float = 1.0,
+    market_weekly_ret: float = 0.0,
+    cagr_annual_pct: float = 14.0
+) -> Tuple[List[str], List[float], str, str]:
+    """
+    Computes an institutional-grade quantitative forecast for a mutual fund:
+    1. Multi-horizon momentum estimation (5-day and 21-day returns).
+    2. Market beta sensitivity linkage (Nifty market sentiment adjustment).
+    3. Damped mean-reversion (Holt's exponential damping towards annualized CAGR).
+    4. Natural cyclical market oscillation based on daily volatility (SD).
+    Returns (forecast_dates, forecast_pct, trend_label, trend_icon).
+    """
+    if not values or not raw_dates or forecast_days <= 0:
+        return [], [], "Flat / Sideways", "➖"
+
+    last_val = values[-1]
+    last_date = raw_dates[-1]
+    if not isinstance(last_date, pd.Timestamp):
+        last_date = pd.to_datetime(last_date)
+
+    # 1. Historical Volatility & Base Daily Return
+    if daily_returns is not None and len(daily_returns.dropna()) > 5:
+        clean_rets = daily_returns.dropna()
+        sigma_daily = float(clean_rets.std()) / 100.0
+        mu_hist_daily = float(clean_rets.mean()) / 100.0
+    else:
+        diffs = np.diff(values) if len(values) > 1 else [0.0]
+        sigma_daily = float(np.std(diffs)) / 100.0 if len(diffs) > 1 else 0.008
+        mu_hist_daily = float(np.mean(diffs)) / 100.0 if len(diffs) > 0 else 0.0005
+
+    sigma_daily = float(np.clip(sigma_daily, 0.003, 0.022))
+
+    # Long-term equilibrium daily drift based on annualized CAGR
+    eq_cagr = max(6.0, min(24.0, cagr_annual_pct)) / 100.0
+    mu_eq_daily = ((1.0 + eq_cagr) ** (1.0 / 252.0)) - 1.0
+
+    # 2. Multi-horizon Momentum
+    win_short = values[-7:] if len(values) >= 7 else values
+    win_med = values[-21:] if len(values) >= 21 else values
+
+    diff_short = (win_short[-1] - win_short[0]) / max(1, len(win_short) - 1) / 100.0 if len(win_short) > 1 else 0.0
+    diff_med = (win_med[-1] - win_med[0]) / max(1, len(win_med) - 1) / 100.0 if len(win_med) > 1 else 0.0
+
+    recent_momentum = 0.6 * diff_med + 0.4 * diff_short
+    market_adj = (beta * (market_weekly_ret / 100.0) / 10.0) if market_weekly_ret else 0.0
+    blended_initial_drift = recent_momentum + market_adj
+
+    # 3. Trend classification
+    annualized_trend = (blended_initial_drift * 252.0) * 100.0
+    if annualized_trend > 15.0:
+        trend_label, trend_icon = "Strong Bullish Momentum", "🚀"
+    elif annualized_trend > 3.0:
+        trend_label, trend_icon = "Moderate Growth Trend", "📈"
+    elif annualized_trend < -15.0:
+        trend_label, trend_icon = "Strong Bearish Trend", "🔻"
+    elif annualized_trend < -3.0:
+        trend_label, trend_icon = "Consolidation / Pullback", "📉"
+    else:
+        trend_label, trend_icon = "Sideways / Stable", "⚖️"
+
+    # 4. Generate dynamic forecast path with damped trend and natural market cycle
+    b_dates = pd.bdate_range(last_date + pd.Timedelta(days=1), periods=forecast_days)
+    fut_dates = [d.strftime("%d %b %Y") for d in b_dates]
+
+    phi = 0.94  # Damping factor
+    fut_vals: List[float] = []
+    current_val = last_val
+
+    for i in range(1, forecast_days + 1):
+        step_drift = mu_eq_daily + (phi ** i) * (blended_initial_drift - mu_eq_daily)
+        cycle = 0.25 * (sigma_daily * 100.0) * np.sin(2.0 * np.pi * i / 21.0)
+        current_val += (step_drift * 100.0) + (cycle * 0.15)
+        fut_vals.append(round(float(current_val), 2))
+
+    return fut_dates, fut_vals, trend_label, trend_icon
+
 def get_fund_history(
     fund_name: str,
     period: str = "1Y",
@@ -187,30 +268,33 @@ def get_fund_history(
         values = [round(float((v / base - 1.0) * 100.0), 2) for v in plot_df["NAV_Value"]]
         source_label = "📁 Historical CSV dataset"
 
-    # Calculate recent trend
-    recent_window = values[-30:] if len(values) > 30 else values
-    recent_rets = np.diff(recent_window) if len(recent_window) > 1 else [0]
-    mu_trend = float(np.mean(recent_rets)) if len(recent_rets) > 0 else 0.0
+    # Market context
+    sentiment, month_ret, week_ret = get_market_sentiment()
+    beta_val = float(fund_df["Beta"].mean()) if "Beta" in fund_df.columns else 1.0
 
-    if mu_trend > 0.01:
-        trend_label, trend_icon = "Trending UP", "📈"
-    elif mu_trend < -0.01:
-        trend_label, trend_icon = "Trending DOWN", "📉"
-    else:
-        trend_label, trend_icon = "Flat / Sideways", "➖"
+    # Calculate CAGR estimate from 1Y or all history
+    nav_series = fund_df["NAV_Value"].dropna()
+    cagr_est = 14.0
+    if len(nav_series) > 252:
+        cagr_est = max(6.0, min(25.0, ((float(nav_series.iloc[-1]) / float(nav_series.iloc[-252])) - 1.0) * 100.0))
 
-    # Forecast
+    # Dynamic Forecast
     fut_dates: List[str] = []
     fut_vals: List[float] = []
     predicted_final: Optional[float] = None
     predicted_nav: Optional[float] = None
+    trend_label, trend_icon = "Sideways / Stable", "⚖️"
 
     if show_forecast and values and raw_dates:
-        last_val = values[-1]
-        last_date = raw_dates[-1]
-        forecast_b_dates = pd.bdate_range(last_date + pd.Timedelta(days=1), periods=forecast_days)
-        fut_dates = [d.strftime("%d %b %Y") for d in forecast_b_dates]
-        fut_vals = [round(float(last_val + mu_trend * (i + 1)), 2) for i in range(forecast_days)]
+        fut_dates, fut_vals, trend_label, trend_icon = compute_dynamic_forecast(
+            values=values,
+            raw_dates=raw_dates,
+            forecast_days=forecast_days,
+            daily_returns=fund_df["Daily_Return_%"],
+            beta=beta_val,
+            market_weekly_ret=week_ret,
+            cagr_annual_pct=cagr_est
+        )
         if fut_vals:
             predicted_final = fut_vals[-1]
             predicted_nav = round(base * (1.0 + predicted_final / 100.0), 2)
@@ -277,6 +361,7 @@ def compare_funds(req: CompareRequest) -> CompareResponse:
     series_list: List[CompareSeries] = []
     table_list: List[CompareFundStats] = []
     nav_today = get_live_nav_amfi()
+    sentiment, month_ret, week_ret = get_market_sentiment()
 
     for idx, fund in enumerate(req.fund_names[:15]):
         full_fdf = df[df["Scheme_Name"] == fund].sort_values("Date")
@@ -297,17 +382,25 @@ def compare_funds(req: CompareRequest) -> CompareResponse:
                 dates.append("Today")
                 values.append(live_val)
 
-        # Forecast
+        # Dynamic Forecast for Comparison
         fut_dates: List[str] = []
         fut_vals: List[float] = []
         if req.show_forecast and raw_dates:
-            rets = fdf["Daily_Return_%"].dropna().tail(90)
-            mu = float(rets.mean()) if len(rets) > 0 else 0.0
-            last_val = values[-1]
-            last_date = raw_dates[-1]
-            b_dates = pd.bdate_range(last_date + pd.Timedelta(days=1), periods=req.forecast_days)
-            fut_dates = [d.strftime("%d %b %Y") for d in b_dates]
-            fut_vals = [round(float(last_val + mu * (i + 1)), 2) for i in range(req.forecast_days)]
+            f_beta = float(full_fdf["Beta"].mean()) if "Beta" in full_fdf.columns else 1.0
+            nav_s = full_fdf["NAV_Value"].dropna()
+            f_cagr = 14.0
+            if len(nav_s) > 252:
+                f_cagr = max(6.0, min(25.0, ((float(nav_s.iloc[-1]) / float(nav_s.iloc[-252])) - 1.0) * 100.0))
+
+            fut_dates, fut_vals, _, _ = compute_dynamic_forecast(
+                values=values,
+                raw_dates=raw_dates,
+                forecast_days=req.forecast_days,
+                daily_returns=full_fdf["Daily_Return_%"],
+                beta=f_beta,
+                market_weekly_ret=week_ret,
+                cagr_annual_pct=f_cagr
+            )
 
         series_list.append(
             CompareSeries(
