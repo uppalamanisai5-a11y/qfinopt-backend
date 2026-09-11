@@ -1,6 +1,6 @@
 import numpy as np
 from datetime import datetime, timedelta, date
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from app.models import (
     WithdrawalRequest,
     WithdrawalResponse,
