@@ -83,12 +83,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def _get_apk_path() -> Optional[str]:
+    candidate_paths = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "QFinOpt.apk")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "QFinOpt.apk")),
+        os.path.abspath(os.path.join(os.getcwd(), "QFinOpt.apk")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")),
+    ]
+    for p in candidate_paths:
+        if os.path.exists(p) and os.path.getsize(p) > 0:
+            return p
+    return None
+
+def _get_report_pdf_path() -> Optional[str]:
+    candidate_paths = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "Q_FinOpt_Project_Report.pdf")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Q_FinOpt_Project_Report.pdf")),
+        os.path.abspath(os.path.join(os.getcwd(), "Q_FinOpt_Project_Report.pdf")),
+    ]
+    for p in candidate_paths:
+        if os.path.exists(p) and os.path.getsize(p) > 0:
+            return p
+    return None
+
 @app.get("/", response_class=HTMLResponse)
 def home_download_page():
     """Interactive download page for the Q-FinOpt Android mobile app."""
-    apk_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "QFinOpt.apk"))
+    apk_path = _get_apk_path()
     apk_size_mb = 0.0
-    if os.path.exists(apk_path):
+    if apk_path and os.path.exists(apk_path):
         apk_size_mb = round(os.path.getsize(apk_path) / (1024 * 1024), 2)
     
     html = f"""
@@ -224,23 +248,32 @@ def home_download_page():
     return HTMLResponse(content=html)
 
 @app.get("/download")
+@app.get("/download/apk")
 @app.get("/QFinOpt.apk")
 def download_apk():
     """Direct binary download endpoint for the Android APK."""
-    apk_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "QFinOpt.apk"))
-    if not os.path.exists(apk_path):
-        apk_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk"))
-    if os.path.exists(apk_path):
-        return FileResponse(apk_path, media_type="application/vnd.android.package-archive", filename="QFinOpt.apk")
+    apk_path = _get_apk_path()
+    if apk_path and os.path.exists(apk_path):
+        return FileResponse(
+            apk_path,
+            media_type="application/vnd.android.package-archive",
+            filename="QFinOpt.apk",
+            headers={"Content-Disposition": "attachment; filename=QFinOpt.apk"}
+        )
     raise HTTPException(status_code=404, detail="QFinOpt.apk not found on server")
 
 @app.get("/report/project")
 @app.get("/Q_FinOpt_Project_Report.pdf")
 def download_project_report_pdf():
     """Download the comprehensive Q-FinOpt System Technical Report PDF."""
-    pdf_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Q_FinOpt_Project_Report.pdf"))
-    if os.path.exists(pdf_path):
-        return FileResponse(pdf_path, media_type="application/pdf", filename="Q_FinOpt_Project_Report.pdf")
+    pdf_path = _get_report_pdf_path()
+    if pdf_path and os.path.exists(pdf_path):
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            filename="Q_FinOpt_Project_Report.pdf",
+            headers={"Content-Disposition": "attachment; filename=Q_FinOpt_Project_Report.pdf"}
+        )
     raise HTTPException(status_code=404, detail="Project report PDF not found")
 
 @app.get("/health")
